@@ -1,0 +1,6 @@
+Module: facebook_scrape
+- query facebook graph api
+- get a post jason
+- store the jsons in facebook_posts collection
+
+Todo:

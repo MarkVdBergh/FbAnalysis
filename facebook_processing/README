@@ -1,0 +1,7 @@
+Module: facebook_processing
+- query facebook_posts collection
+- call the facebook scrape method
+- process the post
+- store the post in facebook_analytics collection
+
+Todo:
