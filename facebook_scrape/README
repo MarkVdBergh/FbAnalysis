@@ -1,6 +1,21 @@
 Module: facebook_scrape
-- query facebook graph api
+- query facebook graph-api
 - get a post jason
 - store the jsons in facebook_posts collection
 
 Todo:
+- implement flags
+- implement graph-api queries
+- implement test-data creation
+- implement tests
+
+
+
+Done:
+- implement graph-api settings
+- implement list of facebook pages
+
+
+future:
+- check application-token permissions or implement automatical renew of user-token. No permission to all details with application-token (/page_id?fields=about)
+- implement /<page_id>?fields=likes see: https://developers.facebook.com/docs/graph-api/reference/page/likes/
