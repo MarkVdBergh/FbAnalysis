@@ -5,6 +5,7 @@ from bson import ObjectId
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import DuplicateKeyError
 
+from facebook_scrape.helpers import logit
 from facebook_scrape.settings import MONGO_HOST, MONGO_PORT, DB, TEST_DATABASE
 
 client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
@@ -13,6 +14,7 @@ db = client[DB]
 
 # --------------------------------------------------------------------------------------------------------------------
 def setup_databases():
+    # fix: result
     result = {}
     workflow = [
         setup_database_pages(),
@@ -44,12 +46,12 @@ def setup_database_pages(inset_test_doc=True):
         try:
             collection.insert_one(page)
         except DuplicateKeyError as e:
-            print '{}\nERROR: {}'.format('-' * 120, e)
+            logit(setup_database_pages.__name__, 'error', e)
             result = {'page': e}
     return result
 
 
-def setup_database_contents(inset_test_doc=True):
+def setup_database_contents(insert_test_doc=True):
     collection = db.contents
     # indexes
     collection.create_index('id', unique=True)
@@ -63,7 +65,7 @@ def setup_database_contents(inset_test_doc=True):
                                                                                                        'message': 5,
                                                                                                        'description': 5})
     result = {'contents': 'ok'}
-    if inset_test_doc:
+    if insert_test_doc:
         # schema
         content = {'_id': ObjectId('000000000000000000000000'),
                    'id': 0,
@@ -85,34 +87,52 @@ def setup_database_contents(inset_test_doc=True):
         try:
             collection.insert_one(content)
         except DuplicateKeyError as e:
-            print '{}\nERROR: {}'.format('-' * 120, e)
+            logit(setup_database_contents.__name__, 'error', e)
             result = {'page': e}
     return result
 
 
-# todo: make <setup_database_users>
-def setup_database_users(inset_test_doc=True):
+def setup_database_users(insert_test_doc=True):
     collection = db.users
     # indexes
-    # collection.create_index('id', unique=True)
-    # collection.create_index('name')
-    # collection.create_index('created')
-    # collection.create_index('updated')
-    # collection.create_index('nb_shares')
-    # collection.create_index([('id', 1), ('created', -1)])
-    # collection.create_index([('id', 1), ('updated', -1)])
+    collection.create_index('id', unique=True)
+    collection.create_index('name')
+    collection.create_index('updated')
+    collection.create_index('n_reactions')
+    collection.create_index('n_comments')
     result = {'users': 'ok'}
-    if inset_test_doc:
+    if insert_test_doc:
         # schema
+        activity1 = {
+            'date': datetime.now(),
+            'kind': 'reacted',
+            'sub_kind': 'like',
+            'page_ref': ObjectId('000000000000000000000000'),
+            'poststat_ref': ObjectId('000000000000000000000000'),
+            'comment_ref': None,
+            'content_ref': ObjectId('000000000000000000000000')}
+        activity2 = {
+            'date': datetime.now(),
+            'kind': 'reacted',
+            'sub_kind': 'like',
+            'page_ref': ObjectId('000000000000000000000000'),
+            'poststat_ref': ObjectId('000000000000000000000000'),
+            'comment_ref': None,
+            'content_ref': ObjectId('000000000000000000000000')}
         user = {'_id': ObjectId('000000000000000000000000'),
                 'id': 0,
-                'updated': datetime.utcnow()
-                }
+                'name': 'name_0',
+                'pic': 'picture_0',
+                'reaction_refs': [activity1],
+                'n_reactions': 1,
+                'comment_refs': [activity2],
+                'n_comments': 1,
+                'updated': datetime.utcnow()}
         # insert
         try:
             collection.insert_one(user)
         except DuplicateKeyError as e:
-            print '{}\nERROR: {}'.format('-' * 120, e)
+            logit(setup_database_users.__name__, 'error', e)
             result = {'page': e}
     return result
 
@@ -130,4 +150,4 @@ if __name__ == '__main__':
     print 'Collections: ', db.collection_names()
     print setup_databases()
     # drop_test_database()
-#
+    #

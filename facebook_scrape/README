@@ -4,14 +4,17 @@ Module: facebook_scrape
 - store the jsons in facebook_posts collection
 
 Todo:
+- implement reading posts from old db
 - implement flags
 - implement graph-api queries
 - implement test-data creation
 - implement tests
+- implement logging. see: https://docs.python.org/2/library/logging.html
 
 
 
 Done:
+
 - implement graph-api settings
 - implement list of facebook pages
 
