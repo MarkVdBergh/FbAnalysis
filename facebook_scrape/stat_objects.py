@@ -1,7 +1,10 @@
+from collections import defaultdict
 from datetime import datetime
-
 from pymongo import MongoClient
+from pymongo import UpdateOne
+from pymongo.errors import BulkWriteError
 
+from facebook_scrape.helpers import logit
 from facebook_scrape.settings import DB, MONGO_HOST, MONGO_PORT
 
 client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
@@ -10,6 +13,12 @@ db = client[DB]
 
 class StatBase(object):
     collection = None
+    bulk_inserts = []
+    bulk_updates = []
+    set_fields = []
+    inc_fields = []
+    push_fields=[]
+    add_to_set_fields=[]
 
     def __init__(self, doc_id):
         # common attributes
@@ -18,7 +27,7 @@ class StatBase(object):
         self.flag = 'MEMORY'
 
     def get_id_(self):
-        result = self.collection.find_one(filter={'id': self.pk}, projection={'_id': 1})
+        result = self.collection.find_one(filter={'id': self.pk}, projection={'_id': 1, 'id': 1, 'flag': 1})
         if result:
             self._id = result.get('_id', 'ERROR')
             self.flag = result.get('flag', 'MISSING')
@@ -28,11 +37,38 @@ class StatBase(object):
             self.flag = 'INIT'
         return self._id
 
-    def upsert(self):
-        pass
+    def add_to_bulk_update(self):
+        self.__class__.bulk_updates.append(self)
 
-    def update(self):
-        pass
+    def add_to_bulk_inserts(self):
+        self.__class__.bulk_inserts.append(self)
+
+    @classmethod
+    def bulk_write(cls):
+        operations = []
+        for class_doc in cls.bulk_updates:
+            update_doc=defaultdict(dict) # dict, but allows nested,
+            for k, v in class_doc.__dict__.iteritems():
+                if v:  # not None
+                    if k in cls.set_fields:
+                        update_doc['$set'][k] = v
+                    if k in cls.inc_fields:
+                        update_doc['$inc'][k] = v
+                    if k in cls.add_to_set_fields:
+                        update_doc['$addToSet'][k] = v
+                    if k in cls.push_fields:
+                        update_doc['push'][k] = v
+            update_doc['$set']['flag']=0
+            operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
+        print operations
+        try:
+            result = cls.collection.bulk_write(operations)
+            logit(cls.bulk_write.__name__, 'info', 'Updated {} documents'.format(len(operations)))
+        except BulkWriteError as e:
+            logit(cls.bulk_write.__name__, 'error', e.details)
+            result = e.details
+        return result
+
 
     def populatexxx(self):
         doc = self.collection.find_one({'id': self.pk})
@@ -43,12 +79,22 @@ class StatBase(object):
     def __str__(self):
         return self.__dict__.__str__()
 
+    def __repr__(self):  # for printing class instances in lists
+        return self.__str__()
 
-class Page(StatBase):
+
+class Pages(StatBase):
+    collection = db.pages
+    bulk_inserts = []
+    bulk_updates = []
+    set_fields = ['name','type','sub_type']
+    inc_fields = []
+    push_fields=[]
+    add_to_set_fields=[]
+
     def __init__(self, pageid):
-        Page.collection = db.pages
-        super(Page, self).__init__(pageid)
         # field declarations
+        super(Pages, self).__init__(pageid)
         self.id = self.pk
         self._id = None
         self.name = None
@@ -56,10 +102,17 @@ class Page(StatBase):
         self.sub_type = None
 
 
-class Content(StatBase):
+class Contents(StatBase):
+    collection = db.contents
+    bulk_inserts = []
+    bulk_updates = []
+    set_fields = ['created','poststat_ref','author_ref','post_type','status_type','message','name','story','link','picture_link','description','description']
+    inc_fields = ['nb_reactions','nb_comments','nb_shares']
+    push_fields=[]
+    add_to_set_fields=[]
+
     def __init__(self, content_id):
-        Content.collection = db.contents
-        super(Content, self).__init__(content_id)
+        super(Contents, self).__init__(content_id)
         # field declarations
         self.id = self.pk
         self._id = None
@@ -67,7 +120,7 @@ class Content(StatBase):
 
         self.page_ref = None
         self.poststat_ref = None
-        self.user_ref = None
+        self.author_ref = None
 
         self.post_type = None
         self.status_type = None
@@ -85,18 +138,24 @@ class Content(StatBase):
         self.updated = datetime.utcnow()
 
 
-class Poststat(StatBase):
+class Poststats(StatBase):
+    collection = db.poststats
+    bulk_inserts = []
+    bulk_updates = []
+    set_fields = ['created','page_ref','content_ref','author_ref','post_type','status_type','to_refs','updated']
+    inc_fields = ['nb_shares','nb_reactions','nb_comments','nb_comments_likes']
+    push_fields=[]
+    add_to_set_fields=['reactions','u_reacted','comments','u_commented','u_comments_liked']
+
     def __init__(self, poststat_id):
-        Poststat.collection = db.poststats
-        super(Poststat, self).__init__(poststat_id)
-        # field declarations
+        super(Poststats, self).__init__(poststat_id)
         self.id = self.pk
         self._id = None
         self.created = None
 
         self.page_ref = None
         self.content_ref = None
-        self.user_ref = None
+        self.author_ref = None
 
         self.post_type = None
         self.status_type = None
@@ -114,9 +173,61 @@ class Poststat(StatBase):
         self.u_commented = None
         self.u_comments_liked = None
 
+        self.updated = datetime.utcnow()
+
+
+class Users(StatBase):
+    collection = db.users
+    bulk_inserts = []
+    bulk_updates = []
+    set_fields = ['name', 'picture', 'is_silhouette', 'updated']
+    inc_fields = ['tot_posts', 'tot_toed', 'tot_reactions', 'tot_comments', 'tot_comments_liked']
+    add_to_set_fields = ['pages_active', 'posted', 'toed', 'reacted', 'commented', 'comment_liked']
+    push_fields = []
+
+    def __init__(self, user_id):
+        super(Users, self).__init__(user_id)
+        # field declarations
+        self.id = self.pk
+        self._id = None
+        self.name = None
+        self.picture = None
+        self.is_silhouette = None
+        self.pages_active = None
+
+        self.posted = None
+        self.tot_posts = None
+        self.toed = None
+        self.tot_toed = None
+        self.reacted = None
+        self.tot_reactions = None
+        self.commented = None
+        self.tot_comments = None
+        self.comment_liked = None
+        self.tot_comments_liked = None
+
+        self.updated = datetime.utcnow()
+
+
+class Comments(StatBase):
+    collection = db.comments
+    bulk_inserts = []
+    bulk_updates = []
+    set_fields = []
+    inc_fields = []
+    push_fields=[]
+    add_to_set_fields=[]
+
+    def __init__(self, comment_id):
+        super(Comments, self).__init__(comment_id)
+        self.id = self.pk
+        self._id = None
+
+        self.updated = datetime.utcnow()
+
 
 if __name__ == '__main__':
     pass
-    p = Page('53668151866_70872315459')
+    p = Pages('53668151866_70872315459')
     print p.collection
     p.populate()

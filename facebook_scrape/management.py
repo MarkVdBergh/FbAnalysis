@@ -2,9 +2,12 @@ from pprint import pprint
 
 from datetime import datetime
 from bson import ObjectId
+from profilehooks import timecall
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import DuplicateKeyError
 
+from facebook_scrape import facebook_page_lists
+from facebook_scrape import queries
 from facebook_scrape.helpers import logit
 from facebook_scrape.settings import MONGO_HOST, MONGO_PORT, DB, TEST_DATABASE
 
@@ -143,6 +146,30 @@ def drop_test_database():
 
 
 # --------------------------------------------------------------------------------------------------------------------
+
+
+@timecall()
+def insert_facebook_page_list(pages=facebook_page_lists):
+    """
+        Takes a dict with form : {type:{subtype:[page_id]}}, retrieves facebook details and stores each page in the <page> collection
+        :param pages: dict:  Has the form : {type:{subtype:[page_id]}}
+        :return: ObjectId: _id of the inerted page
+        """
+    inserted_ids = []
+    for t in pages:
+        for sub_t in pages[t]:
+            for page_id in pages[t][sub_t]:
+                page = queries.fb_get_page(page_id)  # page={'id':.., 'name':...}
+                page['type'] = t
+                page['sub_type'] = sub_t
+                page['updated'] = datetime.utcnow()
+                _id = queries.insert_page(page)
+                inserted_ids.append(_id)
+    return inserted_ids
+
+
+# --------------------------------------------------------------------------------------------------------------------
+
 
 if __name__ == '__main__':
     print '_' * 120

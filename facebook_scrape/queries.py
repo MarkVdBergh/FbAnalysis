@@ -20,7 +20,7 @@ client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
 def fb_get_page(page_id, access_token=fb_access_token, time_out=120, fields='id, name'):
     """
         Application-tokens permits only 'id' and 'name' field.
-        User-tokens permit other fields, like 'about'.
+        Users-tokens permit other fields, like 'about'.
 
         @Returns {u'name': u'VRT deredactie.be', u'id': u'270994524621'}
     """
