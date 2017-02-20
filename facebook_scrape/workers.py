@@ -2,77 +2,19 @@ from datetime import datetime, timedelta
 from pprint import pprint
 from time import sleep
 
+import pandas as pd
 from profilehooks import profile, timecall
+from pymongo import MongoClient
 
-from  facebook_page_lists import facebook_page_lists
 from facebook_scrape import queries
+from facebook_scrape.settings import FB_APP_ID, MONGO_HOST, MONGO_PORT, FB_APP_SECRET
 from facebook_scrape.stat_objects import Pages, Contents, Poststats, Users
 
 
-# # fix: should be in PageWorker
-# class CommentWorker(object):
-#     def __init__(self, page_id):
-#         self.page_ref = Pages(page_id).get_id_()
-#         self.page_id = page_id
-#
-#     def process_reactions(self, since=None, until=None, old_db=True):
-#         pass
-#
-#     def _get_likes(self, since=None, until=None, old_db=True):
-#         pass
-#
-# # fix: should be in PageWorker
-# class ReactionWorker(object):
-#     def __init__(self, page_id):
-#         self.page_ref = Pages(page_id).get_id_()
-#         self.page_id = page_id
-#
-#     def process_reactions(self, since=None, until=None, old_db=True):
-#         fb_posts = self._get_reactions(since, until, old_db)
-#         for p in fb_posts:
-#             print p
-#         1/0
-#
-#         # OLD CODE !!!
-#         # u_reacted / nb_reactions
-#         reacts = [self.fbpost.reactions[r].to_mongo().to_dict() for r in xrange(len(self.fbpost.reactions))]  # Fix: only needed to convert EmbeddedList to list of dics
-#         if reacts:
-#             # Fix: check if reacts[0].get('black..., None) is faster
-#             if reacts[0].keys() != ['blacklisted']:  # Fix: Scraping
-#                 df_reacts = pd.DataFrame(reacts)
-#                 df_reacts['type'] = df_reacts['type'].str.lower()  # LIKE->like
-#                 dfg_reacts = df_reacts.groupby(['type'])  # tuple of (str,df)
-#                 # set the count per type
-#                 self.poststat.reactions = dfg_reacts['id'].count().to_dict()
-#                 self.poststat.nb_reactions = sum(self.poststat.reactions.values())
-#                 # Iterate reactions and extract userdata
-#                 reacted = {}
-#                 for i, usr in df_reacts.iterrows():  # row is pandas.Series
-#                     user, _useractivity = self.__make_user(user_id=usr['id'],
-#                                                            user_name=usr['name'],
-#                                                            user_picture=None,
-#                                                            date=self.poststat.created,
-#                                                            action_type='reaction',
-#                                                            action_subtype=usr['type'])
-#                     user_upsdoc = user.to_mongo().to_dict()
-#                     user_upsdoc.update(push__reacted=_useractivity)
-#                     user_upsdoc.update(inc__tot_reactions=1)
-#                     user.upsert_doc(ups_doc=user_upsdoc)
-#                     # Add user.oid to the correct list in 'poststat.u_reacted'
-#                     # see https://docs.quantifiedcode.com/python-anti-patterns/correctness/not_using_setdefault_to_initialize_a_dictionary.html
-#                     reacted.setdefault(usr['type'], []).append(user.oid)
-#                 self.poststat.u_reacted = reacted
-#         return None
-#
-#     def _get_reactions(self, since=None, until=None, old_db=True):
-#         if old_db:
-#             reactions = queries.fb_get_reactions_from_old_db(page_id=self.page_id, since=since, until=until)  # cursor
-#         else:
-#             reactions = queries.fb_get_reactions(page_id=self.page_id, since=since, until=until)  # list
-#         return reactions
-
-
 class PageWorker(object):
+    # todo check if bulk_update contains more than 1 document for the same user/content, ... and conflicts !
+    # todo check if I don't overwrite fields when update
+    # todo: implement 'own_page'
     def __init__(self, page_id):
         self.page_ref = Pages(page_id).get_id_()
         self.page_id = page_id
@@ -81,16 +23,6 @@ class PageWorker(object):
     def process_posts(self, since=None, until=None, old_db=True):
         fb_posts = self._get_posts(since, until, old_db)
         for p in fb_posts:
-            ##########################################################################################################
-            # fix: implement reactions; rest works
-            # Be careful where to put the 'reactions' code. Possible update problems when same user in past and reaction?
-
-            # print queries.fb_get_reactions(p['id'])
-            for r in queries.fb_get_reactions_from_old_db(p['id']):
-                print r
-                print 'x' * 100
-            ###########################################################################################################
-
             # initiation of refs
             page_ref = self.page_ref
             content = Contents(content_id=p['id'])
@@ -98,6 +30,37 @@ class PageWorker(object):
             poststat = Poststats(poststat_id=p['id'])
             poststat_ref = poststat.get_id_()
             created = datetime.fromtimestamp(p.get('created_time', 0))
+
+            ##########################################################################################################
+            reactions = self._get_reactions(p['id'], old_db=old_db)
+            if reactions:
+                df_reactions = pd.DataFrame(reactions)
+                df_reactions['type'] = df_reactions['type'].str.lower()  # LIKE->like
+                dfg_reactions = df_reactions.groupby(['type'])  # tuple of (str,df)
+
+                # set the count per type
+                poststat.reactions = dfg_reactions['id'].count().to_dict()
+                _nb_reactions = sum(poststat.reactions.values())
+                content.nb_reactions = _nb_reactions
+                poststat.nb_reactions = _nb_reactions
+                # Iterate reactions and extract userdata
+                u_reacted = {}
+                for i, usr_s in df_reactions.iterrows():  # usr_ser is pandas.Series
+                    _user = Users(usr_s['id'])
+                    _user_id_ = _user.get_id_()
+                    _user.name = usr_s['name']
+                    _user.picture = usr_s['pic'].strip('https://scontent.xx.fbcdn.net/v/t1.0-1/p100x100/')
+                    _user.pages_active = page_ref
+                    _user.reacted = {'date': created, 'reaction': usr_s['type'], 'page_ref': page_ref, 'poststat_ref': poststat_ref, 'content_ref': content_ref}
+                    _user.tot_reactions = 1
+
+                    _user.add_to_bulk_update()
+
+                    # Add user._id to the correct list in 'poststat.u_reacted'
+                    # see https://docs.quantifiedcode.com/python-anti-patterns/correctness/not_using_setdefault_to_initialize_a_dictionary.html
+                    u_reacted.setdefault(usr_s['type'], []).append(_user_id_)
+                Users.bulk_write()
+                poststat.u_reacted = u_reacted
 
             # work on content
             content.created = created
@@ -112,7 +75,7 @@ class PageWorker(object):
             content.link = p.get('link', None)
             content.picture_link = p.get('picture', None)
             content.description = p.get('description', None)
-            # content.nb_reactions = None                                                   # todo
+            # content.nb_reactions = None                                                   # ok
             # content.nb_comments = None                                                    # todo
             content.nb_shares = p.get('shares', {}).get('count', 0)
             content.updated = datetime.utcnow()
@@ -127,14 +90,14 @@ class PageWorker(object):
             # poststat.to_refs = to_refs                                                    # ok
             poststat.nb_shares = p.get('shares', {}).get('count', 0)
 
-            # poststat.nb_reactions = None
-            # poststat.nb_comments = None
-            # poststat.nb_comments_likes = None
-            # poststat.reactions = None
-            # poststat.u_reacted = None
-            # poststat.comments = None
-            # poststat.u_commented = None
-            # poststat.u_comments_liked = None
+            # poststat.nb_reactions = None                                                  # ok
+            # poststat.nb_comments = None                                                   # todo
+            # poststat.nb_comments_likes = None                                             # todo
+            # poststat.reactions = None                                                     # ok
+            # poststat.u_reacted = None                                                     # ok
+            # poststat.comments = None                                                      # todo
+            # poststat.u_commented = None                                                   # todo
+            # poststat.u_comments_liked = None                                              # todo
 
             # work on users
             # author
@@ -177,23 +140,35 @@ class PageWorker(object):
         print '-' * 120
         Poststats.bulk_write()
         print '-' * 120
+        sleep(.000001)
 
     def _get_posts(self, since=None, until=None, old_db=True):
         if old_db:
-            posts = queries.fb_get_posts_from_old_db(page_id=self.page_id, since=since, until=until)  # cursor
+            reactions = queries.fb_get_posts_from_old_db(page_id=self.page_id, since=since, until=until)  # cursor
         else:
-            posts = queries.fb_get_posts(page_id=self.page_id, since=since, until=until)  # list
-        return posts
+            reactions = queries.fb_get_posts(page_id=self.page_id, since=since, until=until)  # list
+        return reactions
 
+    def _get_reactions(self, post_id, old_db=True):
+        if old_db:
+            reactions = queries.fb_get_reactions_from_old_db(post_id)  # list
+        else:
+            reactions = queries.fb_get_reactions(post_id)  # list
+        return reactions
 
 if __name__ == '__main__':
     # insert_facebook_page_list()
-    start = datetime.now() - timedelta(days=5, hours=18)
-    pw = PageWorker(page_id='53668151866')
-    pw.process_posts(since=start, until=None, old_db=True)
+    start = datetime.now() - timedelta(days=2, hours=18)
 
-
-
-
-
-
+    # fix : -------------------------------------------------------------------------
+    fb_access_token = FB_APP_ID + "|" + FB_APP_SECRET
+    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    db = client['test']
+    fb = db.pages
+    docs = {'type': 'politics'}
+    q = fb.find(docs)
+    # fix : -------------------------------------------------------------------------
+    for p in q:
+        print p
+        pw = PageWorker(page_id=p['id'])
+        pw.process_posts(since=None, until=None, old_db=True)

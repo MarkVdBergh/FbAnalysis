@@ -22,3 +22,9 @@ Done:
 future:
 - check application-token permissions or implement automatical renew of user-token. No permission to all details with application-token (/page_id?fields=about)
 - implement /<page_id>?fields=likes see: https://developers.facebook.com/docs/graph-api/reference/page/likes/
+- config mongod: disable thp
+    - sudo cat /sys/kernel/mm/transparent_hugepage/enabled  to check if enabled
+    - sudo hugeadm --thp-never to disable
+    - check if settings saved when reboot
+
+

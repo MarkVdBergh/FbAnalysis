@@ -4,7 +4,7 @@
 facebook_page_lists = {
     'politics': {
         'Open Vld': [
-            '53668151866',  # VLD
+            '53668151866',  # VLD #----------------------------------------------------------------
             '149158155084',  # Gwendolyn Rutten
             '228307843991539',  # Alexander De Croo
             '62130106444',  # Philippe De Backer
@@ -71,7 +71,7 @@ facebook_page_lists = {
         ],
         'Popular': [
             '345644812211706',  # Het Laatste Nieuws
-            '37823307325',  # Het Nieuwsblad
+            '37823307325',  # Het Nieuwsblad #----------------------------------------------
             '223630074319030',  # VTM News
             '134679853231866',  # Het Pallieterke
             '443387969094801'  # Newsmonkey

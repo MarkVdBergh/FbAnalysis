@@ -7,7 +7,7 @@ if not testing:
     print ' ' * 20 + 'WARNING !!!!'
     print ' ' * 20 + 'WORKING ON PRODUCTION DATABASE'
     print '*' * 100
-    DB = _production_database
+    DB = PRODUCTION_DATABASE
 else:
     DB = TEST_DATABASE
 

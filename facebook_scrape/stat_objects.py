@@ -13,8 +13,11 @@ db = client[DB]
 
 class StatBase(object):
     collection = None
-    bulk_inserts = []
-    bulk_updates = []
+    bulk_inserts_buffer = []
+    bulk_updates_buffer = []
+    bulk_inserts_buffer_size = 1000
+    bulk_updates_buffer_size = 1000
+
     set_fields = []
     inc_fields = []
     push_fields = []
@@ -38,32 +41,38 @@ class StatBase(object):
         return self._id
 
     def add_to_bulk_update(self):
-        self.__class__.bulk_updates.append(self)
+        self.__class__.bulk_updates_buffer.append(self)
+        nb_documents = len(self.__class__.bulk_updates_buffer)
+        if nb_documents >= self.__class__.bulk_updates_buffer_size:
+            logit(self.__class__.__name__, 'info', 'Buffer ({}) full'.format(nb_documents))  # fix: test it
+            result = self.bulk_write()  # flush buffer
 
     @classmethod
     def bulk_write(cls):
-        operations = []
-        for class_doc in cls.bulk_updates:
-            update_doc = defaultdict(dict)  # dict, but allows nested,
-            for k, v in class_doc.__dict__.iteritems():
-                if v:  # not None
-                    if k in cls.set_fields:
-                        update_doc['$set'][k] = v
-                    if k in cls.inc_fields:
-                        update_doc['$inc'][k] = v
-                    if k in cls.add_to_set_fields:
-                        update_doc['$addToSet'][k] = v
-                    if k in cls.push_fields:
-                        update_doc['push'][k] = v
-            update_doc['$set']['flag'] = 0
-            operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
-        print operations
-        try:
-            result = cls.collection.bulk_write(operations)
-            logit(cls.bulk_write.__name__, 'info', 'Updated {} documents'.format(len(operations)))
-        except BulkWriteError as e:
-            logit(cls.bulk_write.__name__, 'error', e.details)
-            result = e.details
+        result = None
+        if cls.bulk_updates_buffer:  # there are docuents to upgrade
+            operations = []
+            for class_doc in cls.bulk_updates_buffer:
+                update_doc = defaultdict(dict)  # dict, but allows nested,
+                for k, v in class_doc.__dict__.iteritems():
+                    if v:  # not None
+                        if k in cls.set_fields:
+                            update_doc['$set'][k] = v
+                        if k in cls.inc_fields:
+                            update_doc['$inc'][k] = v
+                        if k in cls.add_to_set_fields:
+                            update_doc['$addToSet'][k] = v
+                        if k in cls.push_fields:
+                            update_doc['push'][k] = v
+                update_doc['$set']['flag'] = 0
+                operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
+            try:
+                result = cls.collection.bulk_write(operations)
+                cls.bulk_updates_buffer = []
+                logit(cls.__name__, 'info', 'Updated {} documents'.format(len(operations)))
+            except BulkWriteError as e:
+                logit(cls.__name__, 'error', e.details)
+                result = e.details
         return result
 
     def populate(self):
@@ -81,8 +90,10 @@ class StatBase(object):
 
 class Pages(StatBase):
     collection = db.pages
-    bulk_inserts = []
-    bulk_updates = []
+    bulk_inserts_buffer = []
+    bulk_updates_buffer = []
+    bulk_inserts_buffer_size = 10
+    bulk_updates_buffer_size = 10
     set_fields = ['name', 'type', 'sub_type']
     inc_fields = []
     push_fields = []
@@ -100,9 +111,12 @@ class Pages(StatBase):
 
 class Contents(StatBase):
     collection = db.contents
-    bulk_inserts = []
-    bulk_updates = []
-    set_fields = ['created', 'poststat_ref', 'author_ref', 'post_type', 'status_type', 'message', 'name', 'story', 'link', 'picture_link', 'description', 'description']
+    bulk_inserts_buffer = []
+    bulk_updates_buffer = []
+    bulk_inserts_buffer_size = 100
+    bulk_updates_buffer_size = 100
+    set_fields = ['created', 'poststat_ref', 'page_ref', 'author_ref', 'post_type', 'status_type',
+                  'message', 'name', 'story', 'link', 'picture_link', 'description', 'updated']
     inc_fields = ['nb_reactions', 'nb_comments', 'nb_shares']
     push_fields = []
     add_to_set_fields = []
@@ -136,12 +150,16 @@ class Contents(StatBase):
 
 class Poststats(StatBase):
     collection = db.poststats
-    bulk_inserts = []
-    bulk_updates = []
-    set_fields = ['created', 'page_ref', 'content_ref', 'author_ref', 'post_type', 'status_type', 'to_refs', 'updated']
+    bulk_inserts_buffer = []
+    bulk_updates_buffer = []
+    bulk_inserts_buffer_size = 100
+    bulk_updates_buffer_size = 100
+
+    set_fields = ['created', 'page_ref', 'content_ref', 'author_ref', 'post_type', 'status_type', 'to_refs',
+                  'reactions', 'u_reacted', 'comments', 'u_commented', 'u_comments_liked', 'updated']
     inc_fields = ['nb_shares', 'nb_reactions', 'nb_comments', 'nb_comments_likes']
     push_fields = []
-    add_to_set_fields = ['reactions', 'u_reacted', 'comments', 'u_commented', 'u_comments_liked']
+    add_to_set_fields = []
 
     def __init__(self, poststat_id):
         super(Poststats, self).__init__(poststat_id)
@@ -174,8 +192,10 @@ class Poststats(StatBase):
 
 class Users(StatBase):
     collection = db.users
-    bulk_inserts = []
-    bulk_updates = []
+    bulk_inserts_buffer = []
+    bulk_updates_buffer = []
+    bulk_inserts_buffer_size = 1000
+    bulk_updates_buffer_size = 1000
     set_fields = ['name', 'picture', 'is_silhouette', 'updated']
     inc_fields = ['tot_posts', 'tot_toed', 'tot_reactions', 'tot_comments', 'tot_comments_liked']
     add_to_set_fields = ['pages_active', 'posted', 'toed', 'reacted', 'commented', 'comment_liked']
@@ -196,7 +216,7 @@ class Users(StatBase):
         self.toed = None
         self.tot_toed = None
         self.reacted = None
-        self.tot_reactions = None
+        self.tot_reactions = None  # todo: make if {like: 100, angry:10, ...}
         self.commented = None
         self.tot_comments = None
         self.comment_liked = None
@@ -205,11 +225,10 @@ class Users(StatBase):
         self.updated = datetime.utcnow()
 
 
-
 class Comments(StatBase):
     collection = db.comments
-    bulk_inserts = []
-    bulk_updates = []
+    bulk_inserts_buffer = []
+    bulk_updates_buffer = []
     set_fields = []
     inc_fields = []
     push_fields = []
