@@ -81,6 +81,49 @@ def fb_get_posts_from_old_db(page_id, since=None, until=None, sort=False, flag=N
         pass
     return posts
 
+# fix: Needs rework and testing
+def fb_get_reactions(page_id, since=None, until=None):
+    """
+
+    """
+    graph = facebook.GraphAPI(access_token=fb_access_token, timeout=60, version='2.8')
+    # For fields see: https://developers.facebook.com/docs/graph-api/reference/v2.8/post/
+    field_list = ['id', 'name']
+    fields = ','.join(field_list)
+    chunk = graph.get_connections(page_id, connection_name='reactions', fields=fields, date_format='U', since=since, until=until)
+    # Add data to each post
+    posts = []
+    while True:  # get all chuncks of 25 posts for a page
+        posts += [post for post in chunk['data']]
+        # Attempt to make a request to the next page of data, if it exists.
+        # When there are no more pages (['paging']['next']), break from the loop and end the script.
+        try:
+            chunk = requests.get(chunk['paging']['next']).json()
+            logit(fb_get_posts.__name__, 'info', '{}: {} posts downloaded for {}'.format(datetime.now(), len(posts), page_id))
+        except KeyError:
+            break
+    # posts.reverse()  # posts are retrieved in reverse order (oldest last)
+    return posts
+
+# fix: Needs rework and testing
+def fb_get_reactions_from_old_db(page_id, since=None, until=None, sort=False, flag=None):
+    db = client['politics']
+    collection = db.facebook
+    fltr = {'id': page_id}
+    proj = {'id':1,'reactions.id': 1, 'reactions.namex': 1, '_id': 0}
+    if since:
+        since = dt_to_ts(since)
+        fltr.update({'created_time': {'$gte': since}})
+    if until:
+        until = dt_to_ts(until)
+        fltr.update({'created_time': {'$lte': until}})
+    posts = collection.find(filter=fltr, projection=proj)
+    if sort: posts = posts.sort([('created_time', 1)])
+    if flag:
+        # todo: implement flag on <facebook> collection
+        pass
+    return posts
+
 
 def update_page(page):
     db = client[DB]
@@ -156,6 +199,7 @@ def bulk_upsert_poststat(poststat_update_list):
         result = e.details
     return result
 
+
 def bulk_upsert_users(user_update_list):
     db = client[DB]
     collection = db.users
@@ -172,10 +216,4 @@ def bulk_upsert_users(user_update_list):
 if __name__ == '__main__':
     pass
     # since = datetime.now() - timedelta(days=200, hours=18)
-    #
-    # posts = fb_get_posts_from_old_db('37823307325', since=since, sort=False)
-    # # pprint(posts.explain())
-    # prev = 0
-    # for p in posts:
-    #     print p['created_time'], p['created_time'] > prev
-    #     prev = p['created_time']
+

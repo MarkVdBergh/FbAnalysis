@@ -29,73 +29,53 @@ def setup_databases():
     return result
 
 
-def setup_database_pages(inset_test_doc=True):
+def setup_database_pages():
     collection = db.pages
     # indexes
     collection.create_index('id', unique=True)
     collection.create_index('name')
     collection.create_index([('type', 1), ('sub_type', 1)])
     result = {'page': 'ok'}
-    if inset_test_doc:
-        # schema
-        page = {'_id': ObjectId('000000000000000000000000'),
-                'id': 0,
-                'name': 'name_0',
-                'type': 'type_0',
-                'sub_type': 'sub_type_0',
-                'updated': datetime.utcnow()
-                }
-        # insert
-        try:
-            collection.insert_one(page)
-        except DuplicateKeyError as e:
-            logit(setup_database_pages.__name__, 'error', e)
-            result = {'page': e}
     return result
 
 
-def setup_database_contents(insert_test_doc=True):
+def setup_database_contents():
     collection = db.contents
     # indexes
     collection.create_index('id', unique=True)
     collection.create_index('name')
     collection.create_index('created')
     collection.create_index('updated')
-    collection.create_index('nb_shares')
     collection.create_index([('id', 1), ('created', -1)])
     collection.create_index([('id', 1), ('updated', -1)])
+    collection.create_index('nb_shares')
     collection.create_index([('message', 'text'), ('name', 'text'), ('description', 'text')], weights={'name': 10,
                                                                                                        'message': 5,
                                                                                                        'description': 5})
     result = {'contents': 'ok'}
-    if insert_test_doc:
-        # schema
-        content = {'_id': ObjectId('000000000000000000000000'),
-                   'id': 0,
-                   'created': datetime.utcnow(),
-                   'u_from_ref': ObjectId('000000000000000000000000'),
-                   'u_to_ref': [ObjectId('000000000000000000000001'), ObjectId('000000000000000000000002')],
-                   'type': 'type_0',
-                   'status_type': 'status_type_0',
-                   'message': 'message_0',
-                   'message_tags': ['tag_0', 'tag_1'],
-                   'link': 'link_0',
-                   'name': 'name_0',
-                   'description': 'description_0',
-                   'picture': 'picture_0',
-                   'story': 'story_0',
-                   'shares': 'shares_0',
-                   'updated': datetime.utcnow()}
-        # insert
-        try:
-            collection.insert_one(content)
-        except DuplicateKeyError as e:
-            logit(setup_database_contents.__name__, 'error', e)
-            result = {'page': e}
+    return result
+def setup_database_pagestats():
+    collection = db.pagestats
+    # indexes
+    collection.create_index('id', unique=True)
+    collection.create_index('created')
+    collection.create_index('updated')
+    collection.create_index([('id', 1), ('created', -1)])
+    collection.create_index([('id', 1), ('updated', -1)])
+    result = {'pagestats': 'ok'}
+    return result
+
+def setup_database_comments():
+    collection = db.pagestats
+    # indexes
+    collection.create_index('id', unique=True)
+    collection.create_index([('id', 1), ('created', -1)])
+    collection.create_index([('id', 1), ('updated', -1)])
+    result = {'comments': 'ok'}
     return result
 
 
-def setup_database_users(insert_test_doc=True):
+def setup_database_users():
     collection = db.users
     # indexes
     collection.create_index('id', unique=True)
@@ -104,39 +84,6 @@ def setup_database_users(insert_test_doc=True):
     collection.create_index('n_reactions')
     collection.create_index('n_comments')
     result = {'users': 'ok'}
-    if insert_test_doc:
-        # schema
-        activity1 = {
-            'date': datetime.now(),
-            'kind': 'reacted',
-            'sub_kind': 'like',
-            'page_ref': ObjectId('000000000000000000000000'),
-            'poststat_ref': ObjectId('000000000000000000000000'),
-            'comment_ref': None,
-            'content_ref': ObjectId('000000000000000000000000')}
-        activity2 = {
-            'date': datetime.now(),
-            'kind': 'reacted',
-            'sub_kind': 'like',
-            'page_ref': ObjectId('000000000000000000000000'),
-            'poststat_ref': ObjectId('000000000000000000000000'),
-            'comment_ref': None,
-            'content_ref': ObjectId('000000000000000000000000')}
-        user = {'_id': ObjectId('000000000000000000000000'),
-                'id': 0,
-                'name': 'name_0',
-                'pic': 'picture_0',
-                'reaction_refs': [activity1],
-                'n_reactions': 1,
-                'comment_refs': [activity2],
-                'n_comments': 1,
-                'updated': datetime.utcnow()}
-        # insert
-        try:
-            collection.insert_one(user)
-        except DuplicateKeyError as e:
-            logit(setup_database_users.__name__, 'error', e)
-            result = {'page': e}
     return result
 
 

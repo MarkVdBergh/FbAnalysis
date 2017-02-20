@@ -17,8 +17,8 @@ class StatBase(object):
     bulk_updates = []
     set_fields = []
     inc_fields = []
-    push_fields=[]
-    add_to_set_fields=[]
+    push_fields = []
+    add_to_set_fields = []
 
     def __init__(self, doc_id):
         # common attributes
@@ -40,14 +40,11 @@ class StatBase(object):
     def add_to_bulk_update(self):
         self.__class__.bulk_updates.append(self)
 
-    def add_to_bulk_inserts(self):
-        self.__class__.bulk_inserts.append(self)
-
     @classmethod
     def bulk_write(cls):
         operations = []
         for class_doc in cls.bulk_updates:
-            update_doc=defaultdict(dict) # dict, but allows nested,
+            update_doc = defaultdict(dict)  # dict, but allows nested,
             for k, v in class_doc.__dict__.iteritems():
                 if v:  # not None
                     if k in cls.set_fields:
@@ -58,7 +55,7 @@ class StatBase(object):
                         update_doc['$addToSet'][k] = v
                     if k in cls.push_fields:
                         update_doc['push'][k] = v
-            update_doc['$set']['flag']=0
+            update_doc['$set']['flag'] = 0
             operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
         print operations
         try:
@@ -69,8 +66,7 @@ class StatBase(object):
             result = e.details
         return result
 
-
-    def populatexxx(self):
+    def populate(self):
         doc = self.collection.find_one({'id': self.pk})
         for k, v in doc.items():
             setattr(self, k, v)
@@ -87,10 +83,10 @@ class Pages(StatBase):
     collection = db.pages
     bulk_inserts = []
     bulk_updates = []
-    set_fields = ['name','type','sub_type']
+    set_fields = ['name', 'type', 'sub_type']
     inc_fields = []
-    push_fields=[]
-    add_to_set_fields=[]
+    push_fields = []
+    add_to_set_fields = []
 
     def __init__(self, pageid):
         # field declarations
@@ -106,10 +102,10 @@ class Contents(StatBase):
     collection = db.contents
     bulk_inserts = []
     bulk_updates = []
-    set_fields = ['created','poststat_ref','author_ref','post_type','status_type','message','name','story','link','picture_link','description','description']
-    inc_fields = ['nb_reactions','nb_comments','nb_shares']
-    push_fields=[]
-    add_to_set_fields=[]
+    set_fields = ['created', 'poststat_ref', 'author_ref', 'post_type', 'status_type', 'message', 'name', 'story', 'link', 'picture_link', 'description', 'description']
+    inc_fields = ['nb_reactions', 'nb_comments', 'nb_shares']
+    push_fields = []
+    add_to_set_fields = []
 
     def __init__(self, content_id):
         super(Contents, self).__init__(content_id)
@@ -142,10 +138,10 @@ class Poststats(StatBase):
     collection = db.poststats
     bulk_inserts = []
     bulk_updates = []
-    set_fields = ['created','page_ref','content_ref','author_ref','post_type','status_type','to_refs','updated']
-    inc_fields = ['nb_shares','nb_reactions','nb_comments','nb_comments_likes']
-    push_fields=[]
-    add_to_set_fields=['reactions','u_reacted','comments','u_commented','u_comments_liked']
+    set_fields = ['created', 'page_ref', 'content_ref', 'author_ref', 'post_type', 'status_type', 'to_refs', 'updated']
+    inc_fields = ['nb_shares', 'nb_reactions', 'nb_comments', 'nb_comments_likes']
+    push_fields = []
+    add_to_set_fields = ['reactions', 'u_reacted', 'comments', 'u_commented', 'u_comments_liked']
 
     def __init__(self, poststat_id):
         super(Poststats, self).__init__(poststat_id)
@@ -209,14 +205,15 @@ class Users(StatBase):
         self.updated = datetime.utcnow()
 
 
+
 class Comments(StatBase):
     collection = db.comments
     bulk_inserts = []
     bulk_updates = []
     set_fields = []
     inc_fields = []
-    push_fields=[]
-    add_to_set_fields=[]
+    push_fields = []
+    add_to_set_fields = []
 
     def __init__(self, comment_id):
         super(Comments, self).__init__(comment_id)
