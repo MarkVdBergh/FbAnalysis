@@ -1,6 +1,7 @@
 """
     <facebook_page_lists> has the form : {type:{subtype:[page_id]}}
 """
+
 facebook_page_lists = {
     'politics': {
         'Open Vld': [
@@ -75,4 +76,8 @@ facebook_page_lists = {
             '223630074319030',  # VTM News
             '134679853231866',  # Het Pallieterke
             '443387969094801'  # Newsmonkey
+        ],
+        'dodgy': [
+            '516931581788989',  # T2W
+            '269008229890736', # Xandernieuws
         ]}}

@@ -5,6 +5,7 @@ import facebook
 from datetime import datetime, timedelta
 
 import requests
+import sys
 from pymongo import InsertOne
 from pymongo import MongoClient
 from pymongo import UpdateOne
@@ -14,7 +15,7 @@ from facebook_scrape.helpers import dt_to_ts, logit
 from facebook_scrape.settings import FB_APP_SECRET, FB_APP_ID, MONGO_HOST, MONGO_PORT, DB
 
 fb_access_token = FB_APP_ID + "|" + FB_APP_SECRET
-client = MongoClient(host=MONGO_HOST, port=MONGO_PORT,)
+client = MongoClient(host=MONGO_HOST, port=MONGO_PORT, )
 
 
 def fb_get_page(page_id, access_token=fb_access_token, time_out=120):
@@ -59,7 +60,7 @@ def fb_get_posts(page_id, since=None, until=None):
     return posts
 
 
-def fb_get_posts_from_old_db(page_id, since=None, until=None, sort=True):
+def fb_get_posts_from_old_db(page_id, since=None, until=None, sort=False, post_filter=None):
     db = client['politics']
     collection = db.facebook
     fltr = {'profile.id': page_id}
@@ -75,7 +76,8 @@ def fb_get_posts_from_old_db(page_id, since=None, until=None, sort=True):
     if until:
         until = dt_to_ts(until)
         fltr.update({'created_time': {'$lte': until}})
-    posts = collection.find(filter=fltr, projection=proj, no_cursor_timeout=False).batch_size(1000)
+    if post_filter: fltr.update(post_filter)
+    posts = collection.find(filter=fltr, projection=proj, no_cursor_timeout=False).batch_size(100)
     if sort: posts = posts.sort([('created_time', 1)])
     return posts
 
@@ -105,8 +107,16 @@ def fb_get_reactions_from_old_db(post_id):
     proj = {'id': 1, 'reactions.type': 1, 'reactions.id': 1, 'reactions.name': 1, 'reactions.pic': 1, '_id': 0}
     comments = collection.find(filter=fltr, projection=proj)
     if comments.count() > 0: comments = comments[0]['reactions']  # strip [{'reactions:{...}]
-    else: comments=[]
+    else: comments = []
     return comments  # list
+
+
+def fb_set_flag(post_id, flag):
+    db = client['politics']
+    collection = db.facebook
+    fltr = {'id': post_id}
+    updt = {'$set': {'flag': flag}}
+    collection.update_one(filter=fltr, update=updt)
 
 
 def update_page(page):
@@ -123,7 +133,7 @@ def get_page_ids_(page_id):
     :return: dict: {'p_id_': ObjectId, 'u_id_': ObjectId}: the <pages> and <users> _id from the page
     """
     db = client[DB]
-    Users = db.users # a page is also a user !
+    Users = db.users  # a page is also a user !
     Pages = db.pages
     page = Pages.find_one(filter={'id': page_id})  # must exist
     p_id_ = page['_id']
@@ -170,6 +180,10 @@ def bulk_insert_content(content_update_list):
     except BulkWriteError as e:
         logit(bulk_insert_content.__name__, 'error', e.details)
         result = e.details
+    else:
+        print content_update_list
+        sys.exit(0)
+
     return result
 
 
@@ -197,6 +211,12 @@ def bulk_upsert_users(user_update_list):
         logit(bulk_upsert_users.__name__, 'error', e.details)
         result = e.details
     return result
+
+
+def management_log_errors(doc):
+    db = client[DB]
+    collection = db.errors
+    collection.insert_one(doc)
 
 
 ######################################################################################################

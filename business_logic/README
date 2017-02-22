@@ -4,4 +4,8 @@ Module: business_logic
 -
 -
 
+Check: https://docs.mongodb.com/manual/core/map-reduce/     and     https://docs.mongodb.com/manual/reference/command/mapReduce/#dbcmd.mapReduce
+
 Todo:
+
+

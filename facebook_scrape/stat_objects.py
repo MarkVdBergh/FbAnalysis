@@ -35,7 +35,7 @@ class StatBase(object):
             self._id = result.get('_id', 'ERROR')
             self.flag = result.get('flag', 'MISSING')
         else:  # document doesn't exist, so make one
-            result = self.collection.insert_one(document={'id': self.pk, 'flag': 'INIT'})
+            result = self.collection.insert_one(document={'id': self.pk, 'flag': 'INIT', 'updated': datetime.utcnow()})
             self._id = result.inserted_id
             self.flag = 'INIT'
         return self._id
@@ -44,8 +44,9 @@ class StatBase(object):
         self.__class__.bulk_updates_buffer.append(self)
         nb_documents = len(self.__class__.bulk_updates_buffer)
         if nb_documents >= self.__class__.bulk_updates_buffer_size:
-            logit(self.__class__.__name__, 'info', 'Buffer ({}) full'.format(nb_documents))  # fix: test it
-            result = self.bulk_write()  # flush buffer
+            if self.__class__.__name__ == 'Poststats':  # Fix: better loggind
+                logit(self.__class__.__name__, 'info', 'Buffer ({}) full'.format(nb_documents))
+            self.bulk_write()  # flush buffer
 
     @classmethod
     def bulk_write(cls):
@@ -66,13 +67,19 @@ class StatBase(object):
                             update_doc['push'][k] = v
                 update_doc['$set']['flag'] = 0
                 operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
-            try:
-                result = cls.collection.bulk_write(operations)
-                cls.bulk_updates_buffer = []
-                logit(cls.__name__, 'info', 'Updated {} documents'.format(len(operations)))
-            except BulkWriteError as e:
-                logit(cls.__name__, 'error', e.details)
-                result = e.details
+            result = cls.collection.bulk_write(operations)
+            cls.bulk_updates_buffer = []
+            # fix: I disabled except because I can't set the flag on the fb post (post_id)
+            # try:
+            #     result = cls.collection.bulk_write(operations)
+            #     cls.bulk_updates_buffer = []
+            #     if cls.__name__ == 'Poststats':  # Fix: better loggind
+            #         logit(cls.__name__, 'info', 'Updated {} documents'.format(len(operations)))
+            # except BulkWriteError as e:
+            #     logit(cls.__name__, 'error', e.details)
+            #     result = e.details
+            #     print '22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222'
+            #     print cls
         return result
 
     def populate(self):
@@ -113,8 +120,8 @@ class Contents(StatBase):
     collection = db.contents
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
-    bulk_inserts_buffer_size = 100
-    bulk_updates_buffer_size = 100
+    bulk_inserts_buffer_size = 300
+    bulk_updates_buffer_size = 300
     set_fields = ['created', 'poststat_ref', 'page_ref', 'author_ref', 'post_type', 'status_type',
                   'message', 'name', 'story', 'link', 'picture_link', 'description', 'updated']
     inc_fields = ['nb_reactions', 'nb_comments', 'nb_shares']
@@ -152,8 +159,8 @@ class Poststats(StatBase):
     collection = db.poststats
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
-    bulk_inserts_buffer_size = 100
-    bulk_updates_buffer_size = 100
+    bulk_inserts_buffer_size = 300
+    bulk_updates_buffer_size = 300
 
     set_fields = ['created', 'page_ref', 'content_ref', 'author_ref', 'post_type', 'status_type', 'to_refs',
                   'reactions', 'u_reacted', 'comments', 'u_commented', 'u_comments_liked', 'updated']
