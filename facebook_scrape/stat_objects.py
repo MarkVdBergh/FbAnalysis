@@ -44,8 +44,7 @@ class StatBase(object):
         self.__class__.bulk_updates_buffer.append(self)
         nb_documents = len(self.__class__.bulk_updates_buffer)
         if nb_documents >= self.__class__.bulk_updates_buffer_size:
-            if self.__class__.__name__ == 'Poststats':  # Fix: better loggind
-                logit(self.__class__.__name__, 'info', 'Buffer ({}) full'.format(nb_documents))
+            logit(self.__class__.__name__, 'info', 'Buffer flush ({}) {} documents'.format(nb_documents, self.__class__.__name__))
             self.bulk_write()  # flush buffer
 
     @classmethod
@@ -69,17 +68,6 @@ class StatBase(object):
                 operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
             result = cls.collection.bulk_write(operations)
             cls.bulk_updates_buffer = []
-            # fix: I disabled except because I can't set the flag on the fb post (post_id)
-            # try:
-            #     result = cls.collection.bulk_write(operations)
-            #     cls.bulk_updates_buffer = []
-            #     if cls.__name__ == 'Poststats':  # Fix: better loggind
-            #         logit(cls.__name__, 'info', 'Updated {} documents'.format(len(operations)))
-            # except BulkWriteError as e:
-            #     logit(cls.__name__, 'error', e.details)
-            #     result = e.details
-            #     print '22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222'
-            #     print cls
         return result
 
     def populate(self):
@@ -120,8 +108,8 @@ class Contents(StatBase):
     collection = db.contents
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
-    bulk_inserts_buffer_size = 300
-    bulk_updates_buffer_size = 300
+    bulk_inserts_buffer_size = 1
+    bulk_updates_buffer_size = 100
     set_fields = ['created', 'poststat_ref', 'page_ref', 'author_ref', 'post_type', 'status_type',
                   'message', 'name', 'story', 'link', 'picture_link', 'description', 'updated']
     inc_fields = ['nb_reactions', 'nb_comments', 'nb_shares']
@@ -159,8 +147,8 @@ class Poststats(StatBase):
     collection = db.poststats
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
-    bulk_inserts_buffer_size = 300
-    bulk_updates_buffer_size = 300
+    bulk_inserts_buffer_size = 1
+    bulk_updates_buffer_size = 100
 
     set_fields = ['created', 'page_ref', 'content_ref', 'author_ref', 'post_type', 'status_type', 'to_refs',
                   'reactions', 'u_reacted', 'comments', 'u_commented', 'u_comments_liked', 'updated']
@@ -202,7 +190,7 @@ class Users(StatBase):
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
     bulk_inserts_buffer_size = 1000
-    bulk_updates_buffer_size = 1000
+    bulk_updates_buffer_size = 10000
     set_fields = ['name', 'picture', 'is_silhouette', 'updated']
     inc_fields = ['tot_posts', 'tot_toed', 'tot_reactions', 'tot_comments', 'tot_comments_liked']
     add_to_set_fields = ['pages_active', 'posted', 'toed', 'reacted', 'commented', 'comment_liked']
@@ -217,7 +205,6 @@ class Users(StatBase):
         self.picture = None
         self.is_silhouette = None
         self.pages_active = None
-
         self.posted = None
         self.tot_posts = None
         self.toed = None

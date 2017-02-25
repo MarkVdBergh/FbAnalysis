@@ -105,7 +105,7 @@ def fb_get_reactions_from_old_db(post_id):
     collection = db.facebook
     fltr = {'id': post_id}
     proj = {'id': 1, 'reactions.type': 1, 'reactions.id': 1, 'reactions.name': 1, 'reactions.pic': 1, '_id': 0}
-    comments = collection.find(filter=fltr, projection=proj)
+    comments = collection.find(filter=fltr, projection=proj).batch_size(1)
     if comments.count() > 0: comments = comments[0]['reactions']  # strip [{'reactions:{...}]
     else: comments = []
     return comments  # list
