@@ -122,7 +122,6 @@ def fb_set_flag(post_id, flag):
 def update_page(page):
     db = client[DB]
     collection = db.pages
-    # page.update({'$set': {'updated': datetime.utcnow()}}) don't update here
     collection.upsert_one(page)
 
 
@@ -168,12 +167,11 @@ def insert_page(page):
 
 
 ######################################################################################################
-# todo: check naming: bulk_insert... and bulk_upsert...
 def bulk_insert_content(content_update_list):
     logit(bulk_insert_content.__name__, 'warning', '<description> and <message_tags> fields missing in old db')
     db = client[DB]
     collection = db.contents
-    operations = (InsertOne(content) for content in content_update_list)  # fix: does generator works? otherwise [] iso ()
+    operations = (InsertOne(content) for content in content_update_list)
     try:
         result = collection.bulk_write(operations)
         logit(bulk_insert_content.__name__, 'info', 'Inserted {} documents'.format(len(content_update_list)))

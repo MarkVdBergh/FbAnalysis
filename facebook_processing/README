@@ -5,3 +5,6 @@ Module: facebook_processing
 - store the post in facebook_analytics collection
 
 Todo:
+
+Check:
+- http://nbviewer.jupyter.org/url/norvig.com/ipython/How%20to%20Do%20Things%20with%20Words.ipynb

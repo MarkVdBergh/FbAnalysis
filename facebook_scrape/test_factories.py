@@ -9,7 +9,6 @@ def create_test_page(i, type_i=None, sub_type_i=None):
     return page
 
 
-# todo: make <create_test_post> factory
 def create_test_post(i):
     pass
 

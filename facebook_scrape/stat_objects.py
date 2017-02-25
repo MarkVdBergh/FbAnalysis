@@ -31,10 +31,7 @@ class StatBase(object):
 
     def get_id_(self):
         result = self.collection.find_one(filter={'id': self.pk}, projection={'_id': 1, 'id': 1, 'flag': 1})
-        if result:
-            self._id = result.get('_id', 'ERROR')
-            self.flag = result.get('flag', 'MISSING')
-        else:  # document doesn't exist, so make one
+        if not result:
             result = self.collection.insert_one(document={'id': self.pk, 'flag': 'INIT', 'updated': datetime.utcnow()})
             self._id = result.inserted_id
             self.flag = 'INIT'
@@ -66,7 +63,7 @@ class StatBase(object):
                             update_doc['push'][k] = v
                 update_doc['$set']['flag'] = 0
                 operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
-            result = cls.collection.bulk_write(operations)
+            result = cls.collection.bulk_write(operations, ordered = False)
             cls.bulk_updates_buffer = []
         return result
 
@@ -190,7 +187,7 @@ class Users(StatBase):
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
     bulk_inserts_buffer_size = 1000
-    bulk_updates_buffer_size = 10000
+    bulk_updates_buffer_size = 9000 # avg size of doc = 1646 => 16M/1,6 = 10K doc., But limit is 1000 per batch anyway
     set_fields = ['name', 'picture', 'is_silhouette', 'updated']
     inc_fields = ['tot_posts', 'tot_toed', 'tot_reactions', 'tot_comments', 'tot_comments_liked']
     add_to_set_fields = ['pages_active', 'posted', 'toed', 'reacted', 'commented', 'comment_liked']

@@ -12,6 +12,10 @@ from termcolor import cprint
 from facebook_scrape import queries
 from facebook_scrape.stat_objects import Pages, Contents, Poststats, Users
 
+# Todo: check if fb flag is set to 1 when error or running is caneled. Same for pages set to 'ENDED'
+# Todo: When 2 runners initiate the same user => duplicate key error ???
+# Todo: better error trapping
+
 
 class PageWorker(object):
     def __init__(self, page_id, from_fb=False):
@@ -69,7 +73,7 @@ class PageWorker(object):
             self.poststat.add_to_bulk_update()
             queries.fb_set_flag(self.post_id, 1)
         # update everything not saved yet for the page
-        try:  # fix: better error trapping
+        try:
             Users.bulk_write()
             Contents.bulk_write()
             Poststats.bulk_write()
@@ -113,7 +117,6 @@ class PageWorker(object):
 
             u_reacted[usr['type']].append(user_id_)
             # print usr['type'], len(u_reacted[usr['type']]), '      ',
-        # Users.bulk_write()  # fix: is this necessary?, better just leve it in the buffer?
         return u_reacted
 
     def process_content(self):

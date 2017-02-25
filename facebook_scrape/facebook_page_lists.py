@@ -79,5 +79,5 @@ facebook_page_lists = {
         ],
         'dodgy': [
             '516931581788989',  # T2W
-            '269008229890736', # Xandernieuws
+            # '269008229890736', # Xandernieuws #fix: doesn't work with app token
         ]}}
