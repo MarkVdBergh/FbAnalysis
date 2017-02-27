@@ -1,6 +1,6 @@
 # mongodb settings
 testing = True
-TEST_DATABASE = 'testXXX'
+TEST_DATABASE = 'test'
 PRODUCTION_DATABASE = 'production'
 if not testing:
     print '*' * 100

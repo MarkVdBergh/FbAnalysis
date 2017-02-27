@@ -2,14 +2,11 @@ from collections import defaultdict
 from datetime import datetime
 from pymongo import MongoClient
 from pymongo import UpdateOne
-from pymongo.errors import BulkWriteError
+from pymongo.errors import BulkWriteError, DuplicateKeyError
 from termcolor import cprint
 
 from facebook_scrape.helpers import logit
 from facebook_scrape.settings import DB, MONGO_HOST, MONGO_PORT
-
-client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
-db = client[DB]
 
 
 class StatBase(object):
@@ -25,16 +22,15 @@ class StatBase(object):
     add_to_set_fields = []
 
     def __init__(self, doc_id):
-        pass
-
-    def get_id_(self, doc_id): # Todo: move this to __init__()
-        result = self.collection.find_one(filter={'id': doc_id}, projection={'_id': 1, 'id': 1, 'flag': 1})
-        if result:
-            _id = result['_id']
-        else:
+        # Load or create new user
+        self.id_ = None  # Just to make sure it's empty. 'id_' because '_id' is a protected class memeber
+        try:
             result = self.collection.insert_one(document={'id': doc_id, 'flag': 'INIT', 'updated': datetime.utcnow()})
-            _id = result.inserted_id
-        return _id
+            # Raises DuplicateKeyError is exists
+            self.id_ = result.inserted_id
+        except DuplicateKeyError:
+            result = self.collection.find_one(filter={'id': doc_id}, projection={'_id': 1, 'id': 1, 'flag': 1})
+            self.id_ = result['_id']
 
     def add_to_bulk_update(self):
         self.__class__.bulk_updates_buffer.append(self)
@@ -62,7 +58,16 @@ class StatBase(object):
                             update_doc['push'][k] = v
                 update_doc['$set']['flag'] = 0
                 operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
-            result = cls.collection.bulk_write(operations, ordered=False)
+            try:
+                result = cls.collection.bulk_write(operations, ordered=False)
+            except:
+                print '-' * 120
+                cprint(operations, 'red')
+                cprint(cls.bulk_updates_buffer, 'red')
+                cprint(cls, 'blue')
+                print '-' * 120
+                raise
+
             cls.bulk_updates_buffer = []
         return result
 
@@ -74,6 +79,8 @@ class StatBase(object):
 
 
 class Pages(StatBase):
+    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    db = client[DB]
     collection = db.pages
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
@@ -86,15 +93,17 @@ class Pages(StatBase):
 
     def __init__(self, page_id):
         # field declarations
-        super(Pages, self).__init__(page_id)
         self.id = page_id
         self._id = None
         self.name = None
         self.type = None
         self.sub_type = None
+        super(Pages, self).__init__(page_id)
 
 
 class Contents(StatBase):
+    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    db = client[DB]
     collection = db.contents
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
@@ -107,7 +116,6 @@ class Contents(StatBase):
     add_to_set_fields = []
 
     def __init__(self, content_id):
-        super(Contents, self).__init__(content_id)
         # field declarations
         self.id = content_id
         self._id = None
@@ -131,9 +139,12 @@ class Contents(StatBase):
         self.nb_shares = None
 
         self.updated = datetime.utcnow()
+        super(Contents, self).__init__(content_id)
 
 
 class Poststats(StatBase):
+    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    db = client[DB]
     collection = db.poststats
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
@@ -147,7 +158,6 @@ class Poststats(StatBase):
     add_to_set_fields = []
 
     def __init__(self, poststat_id):
-        super(Poststats, self).__init__(poststat_id)
         self.id = poststat_id
         self._id = None
         self.created = None
@@ -173,9 +183,12 @@ class Poststats(StatBase):
         self.u_comments_liked = None
 
         self.updated = datetime.utcnow()
+        super(Poststats, self).__init__(poststat_id)
 
 
 class Users(StatBase):
+    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    db = client[DB]
     collection = db.users
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
@@ -187,7 +200,6 @@ class Users(StatBase):
     push_fields = []
 
     def __init__(self, user_id):
-        super(Users, self).__init__(user_id)
         # field declarations
         self.id = user_id
         self._id = None
@@ -207,9 +219,12 @@ class Users(StatBase):
         self.tot_comments_liked = None
 
         self.updated = datetime.utcnow()
+        super(Users, self).__init__(user_id)
 
 
 class Comments(StatBase):
+    client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+    db = client[DB]
     collection = db.comments
     bulk_inserts_buffer = []
     bulk_updates_buffer = []

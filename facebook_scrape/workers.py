@@ -22,13 +22,24 @@ from facebook_scrape.stat_objects import Pages, Contents, Poststats, Users
 # Todo: better error trapping
 # Todo: Use Celery: Distributed Task Queue
 # Todo: implement $currentDate for updated-fields (only for upates! : doc:  {'$currentDate': {'updated': {'$type': 'timestamp'}}
+# Todo: improve logging. See: https://docs.python.org/2/howto/logging.html
+# Fix: check out multiprocess: https://api.mongodb.com/python/current/faq.html#using-pymongo-with-multiprocessing
+#       Potential deadlock when multiprocess.
+#       I'm not sure that putting       client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
+#                                       db = client[DB]
+#       as class variable in stat_objects is the correct way to do it.
+#       Probably better to do it in process_post() and pass the db to 'stat_objects'. Then when I implement multi-process, each new process will have
+#       it's own MongoClient()
+# Todo: Speed: use python-bsonjs package. (https://pypi.python.org/pypi/python-bsonjs). 10x faster than pymongo
+
+
 
 
 class PageWorker(object):
     def __init__(self, page_id, from_fb=False):
         self.page_id = page_id
         self.from_fb = from_fb
-        self.page_ref = Pages(page_id).get_id_(page_id)
+        self.page_ref = Pages(page_id).id_
         self.post = None
         self.post_id = None
         self.content = None
@@ -43,9 +54,9 @@ class PageWorker(object):
             self.post = post
             self.post_id = post['id']
             self.content = Contents(content_id=self.post_id)
-            self.content_ref = self.content.get_id_(self.post_id)
+            self.content_ref = self.content.id_
             self.poststat = Poststats(poststat_id=self.post_id)
-            self.poststat_ref = self.poststat.get_id_(self.post_id)
+            self.poststat_ref = self.poststat.id_
             self.created = datetime.fromtimestamp(post.get('created_time', 0))
 
             self.poststat.u_reacted = self.process_reactions()
@@ -55,6 +66,8 @@ class PageWorker(object):
             self.poststat.add_to_bulk_update()
             # all ok => set flag on fb post
             queries.fb_set_flag(self.post_id, 1)
+
+
         # update everything not saved yet
         Users.bulk_write()
         Contents.bulk_write()
@@ -80,7 +93,7 @@ class PageWorker(object):
         u_reacted = defaultdict(list)
         for __, usr in df_reactions.iterrows():  # usr_ser is pandas.Series
             user = Users(usr['id'])
-            user_id_ = user.get_id_(usr['id'])  #
+            user_id_ = user.id_
             user.name = usr['name']
             user.picture = usr['pic'].strip('https://scontent.xx.fbcdn.net/v/t1.0-1/p100x100/')
             user.pages_active = self.page_ref
@@ -138,9 +151,8 @@ class PageWorker(object):
         # author
         user_id = self.post.get('from', {}).get('id', None)
         author = Users(user_id)  # => p['from.id']
-        author_ref = author.get_id_(user_id)
-        if author.flag == 'INIT':  # set missing fields
-            author.name = self.post.get('from', {}).get('name', 'ERROR')
+        author_ref = author.id_
+        author.name = self.post.get('from', {}).get('name', 'ERROR')
         author.pages_active = self.page_ref
         author.posted = {'date': self.created, 'page_ref': self.page_ref, 'poststat_ref': self.poststat_ref, 'content_ref': self.content_ref}
         author.tot_posts = 1
@@ -155,9 +167,8 @@ class PageWorker(object):
         to_refs = []
         for t in self.post.get('to', {}).get('data', []):  # {u'id': u'10154929041358011', u'name': u'Hilde Vautmans'}
             to = Users(t['id'])
-            to_ref = to.get_id_(t['id'])
-            if to.flag == 'INIT':
-                to.name = t.get('name', 'ERROR')
+            to_ref = to.id_
+            to.name = t.get('name', 'ERROR')
             to.pages_active = self.page_ref
             to.toed = {'date': self.created, 'page_ref': self.page_ref, 'poststat_ref': self.poststat_ref, 'content_ref': self.content_ref}
             to.tot_toed = 1
@@ -167,7 +178,7 @@ class PageWorker(object):
         self.poststat.to_refs = to_refs
         # add content and poststat to bulk_update
 
-    def _get_posts(self, since=None, until=None, from_fb=False, ne_flag=1):
+    def _get_posts(self, since=None, until=None, from_fb=False, ne_flag=9999):
         if not from_fb: reactions = queries.fb_get_posts_from_old_db(page_id=self.page_id, since=since, until=until,
                                                                      post_filter={'flag': {'$ne': ne_flag}})  # cursor
         else: reactions = queries.fb_get_posts(page_id=self.page_id, since=since, until=until)  # list
