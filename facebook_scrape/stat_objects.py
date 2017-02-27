@@ -3,6 +3,7 @@ from datetime import datetime
 from pymongo import MongoClient
 from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
+from termcolor import cprint
 
 from facebook_scrape.helpers import logit
 from facebook_scrape.settings import DB, MONGO_HOST, MONGO_PORT
@@ -24,30 +25,31 @@ class StatBase(object):
     add_to_set_fields = []
 
     def __init__(self, doc_id):
-        # common attributes
-        self.pk = doc_id
-        self._id = None
+        self.pk = None
         self.flag = 'MEMORY'
 
-    def get_id_(self):
-        result = self.collection.find_one(filter={'id': self.pk}, projection={'_id': 1, 'id': 1, 'flag': 1})
-        if not result:
-            result = self.collection.insert_one(document={'id': self.pk, 'flag': 'INIT', 'updated': datetime.utcnow()})
-            self._id = result.inserted_id
-            self.flag = 'INIT'
-        return self._id
+    def get_id_(self, doc_id): # Todo: move this to __init__()
+        result = self.collection.find_one(filter={'id': doc_id}, projection={'_id': 1, 'id': 1, 'flag': 1})
+        if result:
+            _id = result['_id']
+        else:
+            result = self.collection.insert_one(document={'id': doc_id, 'flag': 'INIT', 'updated': datetime.utcnow()})
+            _id = result.inserted_id
+            flag = 'INIT'
+        self.pk=_id
+        return _id
 
     def add_to_bulk_update(self):
         self.__class__.bulk_updates_buffer.append(self)
         nb_documents = len(self.__class__.bulk_updates_buffer)
-        if nb_documents >= self.__class__.bulk_updates_buffer_size:
+        if nb_documents >= self.__class__.bulk_updates_buffer_size:  # buffer full
             logit(self.__class__.__name__, 'info', 'Buffer flush ({}) {} documents'.format(nb_documents, self.__class__.__name__))
             self.bulk_write()  # flush buffer
 
     @classmethod
     def bulk_write(cls):
         result = None
-        if cls.bulk_updates_buffer:  # there are docuents to upgrade
+        if cls.bulk_updates_buffer:  # there are docuents to update
             operations = []
             for class_doc in cls.bulk_updates_buffer:
                 update_doc = defaultdict(dict)  # dict, but allows nested,
@@ -63,15 +65,9 @@ class StatBase(object):
                             update_doc['push'][k] = v
                 update_doc['$set']['flag'] = 0
                 operations.append(UpdateOne(filter={'id': class_doc.id}, update=update_doc, upsert=False))
-            result = cls.collection.bulk_write(operations, ordered = False)
+            result = cls.collection.bulk_write(operations, ordered=False)
             cls.bulk_updates_buffer = []
         return result
-
-    def populate(self):
-        doc = self.collection.find_one({'id': self.pk})
-        for k, v in doc.items():
-            setattr(self, k, v)
-        return self
 
     def __str__(self):
         return self.__dict__.__str__()
@@ -106,7 +102,7 @@ class Contents(StatBase):
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
     bulk_inserts_buffer_size = 1
-    bulk_updates_buffer_size = 100
+    bulk_updates_buffer_size = 1
     set_fields = ['created', 'poststat_ref', 'page_ref', 'author_ref', 'post_type', 'status_type',
                   'message', 'name', 'story', 'link', 'picture_link', 'description', 'updated']
     inc_fields = ['nb_reactions', 'nb_comments', 'nb_shares']
@@ -145,7 +141,7 @@ class Poststats(StatBase):
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
     bulk_inserts_buffer_size = 1
-    bulk_updates_buffer_size = 100
+    bulk_updates_buffer_size = 1
 
     set_fields = ['created', 'page_ref', 'content_ref', 'author_ref', 'post_type', 'status_type', 'to_refs',
                   'reactions', 'u_reacted', 'comments', 'u_commented', 'u_comments_liked', 'updated']
@@ -187,7 +183,7 @@ class Users(StatBase):
     bulk_inserts_buffer = []
     bulk_updates_buffer = []
     bulk_inserts_buffer_size = 1000
-    bulk_updates_buffer_size = 9000 # avg size of doc = 1646 => 16M/1,6 = 10K doc., But limit is 1000 per batch anyway
+    bulk_updates_buffer_size = 1000  # avg size of doc = 1646 => 16M/1,6 = 10K doc., But limit is 1000 per batch anyway
     set_fields = ['name', 'picture', 'is_silhouette', 'updated']
     inc_fields = ['tot_posts', 'tot_toed', 'tot_reactions', 'tot_comments', 'tot_comments_liked']
     add_to_set_fields = ['pages_active', 'posted', 'toed', 'reacted', 'commented', 'comment_liked']
@@ -235,6 +231,3 @@ class Comments(StatBase):
 
 if __name__ == '__main__':
     pass
-    p = Pages('53668151866_70872315459')
-    print p.collection
-    p.populate()
