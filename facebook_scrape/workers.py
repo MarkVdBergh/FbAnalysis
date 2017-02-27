@@ -6,22 +6,28 @@ from time import sleep
 
 import pandas as pd
 import sys
+
+from bson import InvalidDocument
 from profilehooks import profile, timecall
 from termcolor import cprint
 
 from facebook_scrape import queries
 from facebook_scrape.stat_objects import Pages, Contents, Poststats, Users
 
+
 # Todo: check if fb flag is set to 1 when error or running is caneled. Same for pages set to 'ENDED'
-# Todo: When 2 runners initiate the same user => duplicate key error ???
+# Fix: When 2 runners initiate the same user => duplicate key error!!!
+# Fix: Facebook page flag. If a document gets 'ok' flag, it is still in the buffer. A bulk_write error will then have all the fb documents with flag 'ok'
 # Todo: better error trapping
+# Todo: Use Celery: Distributed Task Queue
+# Todo: implement $currentDate for updated-fields (only for upates! : doc:  {'$currentDate': {'updated': {'$type': 'timestamp'}}
 
 
 class PageWorker(object):
     def __init__(self, page_id, from_fb=False):
         self.page_id = page_id
         self.from_fb = from_fb
-        self.page_ref = Pages(page_id).get_id_()
+        self.page_ref = Pages(page_id).get_id_(page_id)
         self.post = None
         self.post_id = None
         self.content = None
@@ -37,41 +43,48 @@ class PageWorker(object):
             self.post = post
             self.post_id = post['id']
             self.content = Contents(content_id=self.post_id)
-            self.content_ref = self.content.get_id_()
+            self.content_ref = self.content.get_id_(self.post_id)
             self.poststat = Poststats(poststat_id=self.post_id)
-            self.poststat_ref = self.poststat.get_id_()
+            self.poststat_ref = self.poststat.get_id_(self.post_id)
             self.created = datetime.fromtimestamp(post.get('created_time', 0))
             try:
                 self.poststat.u_reacted = self.process_reactions()
+                self.process_content()
             except KeyError as e:
-                print e
+                print '11111111111111111111111111111111111111'
+                print e.message, e.args
                 print '-' * 120
                 cprint(self.post, 'red', attrs=['blink'])
                 cprint(self.post_id, 'red')
                 print '-' * 120
                 traceback.print_exc()
                 sys.exit(0)
-            except Exception:
+            except InvalidDocument as e: # fix: this does'nt seem to wo
+                print '22222222222222222222222222222222222222'
+                print e.message, e.args
                 print '-' * 120
-                print 'PROCESS_POSTS'
+                cprint(self.post, 'red', attrs=['blink'])
+                cprint(self.post_id, 'red')
+                print '-' * 120
                 traceback.print_exc()
-                print post
-                print '-' * 120
                 sys.exit(0)
-            try:
-                self.process_content()
             except Exception as e:
-                print '-' * 120
-                print 'PROCESS_CONTENT'
-                traceback.print_exc()
+                print '333333333333333333333333333333333333333'
+                e = sys.exc_info()[0]
                 print e
+                print '-' * 120
+                cprint(self.post, 'red')
+                cprint(self.post_id, 'red', attrs=['blink'])
+                print '-' * 120
+                traceback.print_exc()
                 print post
                 print '-' * 120
                 sys.exit(0)
-            # all ok => set flag on fb post
-            self.content.add_to_bulk_update()
-            self.poststat.add_to_bulk_update()
-            queries.fb_set_flag(self.post_id, 1)
+            else:
+                # all ok => set flag on fb post
+                self.content.add_to_bulk_update()
+                self.poststat.add_to_bulk_update()
+                queries.fb_set_flag(self.post_id, 1)
         # update everything not saved yet for the page
         try:
             Users.bulk_write()
@@ -81,7 +94,7 @@ class PageWorker(object):
             print '-' * 120
             print 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
             traceback.print_exc()
-            print str(e)
+            print
             print '-' * 120
             Users.bulk_inserts_buffer = []
             Poststats.bulk_inserts_buffer = []
@@ -103,7 +116,7 @@ class PageWorker(object):
         u_reacted = defaultdict(list)
         for __, usr in df_reactions.iterrows():  # usr_ser is pandas.Series
             user = Users(usr['id'])
-            user_id_ = user.get_id_()
+            user_id_ = user.get_id_(usr['id']) #
             user.name = usr['name']
             user.picture = usr['pic'].strip('https://scontent.xx.fbcdn.net/v/t1.0-1/p100x100/')
             user.pages_active = self.page_ref
@@ -159,8 +172,9 @@ class PageWorker(object):
 
         # work on users
         # author
-        author = Users(self.post.get('from', {}).get('id', None))  # => p['from.id']
-        author_ref = author.get_id_()
+        user_id=self.post.get('from', {}).get('id', None)
+        author = Users(user_id)  # => p['from.id']
+        author_ref = author.get_id_(user_id)
         if author.flag == 'INIT':  # set missing fields
             author.name = self.post.get('from', {}).get('name', 'ERROR')
         author.pages_active = self.page_ref
@@ -177,7 +191,7 @@ class PageWorker(object):
         to_refs = []
         for t in self.post.get('to', {}).get('data', []):  # {u'id': u'10154929041358011', u'name': u'Hilde Vautmans'}
             to = Users(t['id'])
-            to_ref = to.get_id_()
+            to_ref = to.get_id_(t['id'])
             if to.flag == 'INIT':
                 to.name = t.get('name', 'ERROR')
             to.pages_active = self.page_ref

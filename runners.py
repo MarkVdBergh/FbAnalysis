@@ -15,10 +15,11 @@ client = MongoClient(host=MONGO_HOST, port=MONGO_PORT)
 db = client['test']
 pages = db.pages
 # docs = {'type': 'news', 'flag': {'$ne': 1}}
-# docs = {'type': 'news','id':'37823307325'}
+# docs = {'id':'37823307325'}
 # docs = {'type': 'politics'}
-# q = pages.find(docs)
-q = pages.find()
+# docs={'type': 'news'}
+docs = {}
+q = pages.find(docs)
 ########################################################################################################################
 # since = datetime(2014, 06, 19)
 # until = datetime(2014, 06, 20)
@@ -26,7 +27,7 @@ since = until = None
 for p in q:
     logit('Start', p['id'], p)
     page_id = p['id']
-    if p.get('flag', '') == 'STARTED' or p.get('flag', '') == 'ENDED': continue # skip pages
+    if p.get('flag', '') == 'STARTED' or p.get('flag', '') == 'ENDED': continue  # skip pages
     pw = PageWorker(page_id, from_fb=False)
     pages.update_one({'id': p['id']}, {'$set': {'start': datetime.utcnow(), 'flag': 'STARTED'}})
     pw.process_posts(since=since, until=until)
