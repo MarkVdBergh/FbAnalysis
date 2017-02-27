@@ -60,7 +60,7 @@ def setup_database_contents():
 
 def setup_database_poststats():
     ''''''
-    collection = db.pagestats
+    collection = db.poststats
     # indexes
     collection.create_index('id', unique=True)
     collection.create_index('created')

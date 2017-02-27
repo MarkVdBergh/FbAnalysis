@@ -25,8 +25,7 @@ class StatBase(object):
     add_to_set_fields = []
 
     def __init__(self, doc_id):
-        self.pk = None
-        self.flag = 'MEMORY'
+        pass
 
     def get_id_(self, doc_id): # Todo: move this to __init__()
         result = self.collection.find_one(filter={'id': doc_id}, projection={'_id': 1, 'id': 1, 'flag': 1})
@@ -35,8 +34,6 @@ class StatBase(object):
         else:
             result = self.collection.insert_one(document={'id': doc_id, 'flag': 'INIT', 'updated': datetime.utcnow()})
             _id = result.inserted_id
-            flag = 'INIT'
-        self.pk=_id
         return _id
 
     def add_to_bulk_update(self):
@@ -87,10 +84,10 @@ class Pages(StatBase):
     push_fields = []
     add_to_set_fields = []
 
-    def __init__(self, pageid):
+    def __init__(self, page_id):
         # field declarations
-        super(Pages, self).__init__(pageid)
-        self.id = self.pk
+        super(Pages, self).__init__(page_id)
+        self.id = page_id
         self._id = None
         self.name = None
         self.type = None
@@ -112,7 +109,7 @@ class Contents(StatBase):
     def __init__(self, content_id):
         super(Contents, self).__init__(content_id)
         # field declarations
-        self.id = self.pk
+        self.id = content_id
         self._id = None
         self.created = None
 
@@ -151,7 +148,7 @@ class Poststats(StatBase):
 
     def __init__(self, poststat_id):
         super(Poststats, self).__init__(poststat_id)
-        self.id = self.pk
+        self.id = poststat_id
         self._id = None
         self.created = None
 
@@ -192,7 +189,7 @@ class Users(StatBase):
     def __init__(self, user_id):
         super(Users, self).__init__(user_id)
         # field declarations
-        self.id = self.pk
+        self.id = user_id
         self._id = None
         self.name = None
         self.picture = None
@@ -223,7 +220,7 @@ class Comments(StatBase):
 
     def __init__(self, comment_id):
         super(Comments, self).__init__(comment_id)
-        self.id = self.pk
+        self.id = comment_id
         self._id = None
 
         self.updated = datetime.utcnow()

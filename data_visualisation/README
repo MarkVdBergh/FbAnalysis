@@ -3,6 +3,8 @@ Module: data_visualisation
 
 Todo:
 - choose a visualisation package
+    - dc.js = d3.js + crossfilter
+    - bokeh + datashader: https://github.com/bokeh/datashader
 
 Done:
 
@@ -10,3 +12,12 @@ Done:
 Check:
 - Example: https://pawelmhm.github.io/python/2015/02/15/creating-realtime-scraper.html
 - Python web server comparisson: https://www.digitalocean.com/community/tutorials/a-comparison-of-web-servers-for-python-based-web-applications
+- Which chart: https://www.analyticsvidhya.com/wp-content/uploads/2015/07/Charts.png
+- Designing reusable charts: https://bost.ocks.org/mike/chart/
+- Example datavisualisation with D3.js, crossfilter, DC.js: http://adilmoujahid
+.com/posts/2015/01/interactive-data-visualization-d3-dc-python-mongodb/
+- Use Bootstrap for Html: http://getbootstrap.com
+- D3 Tips and Tricks v4.x: https://leanpub.com/d3-t-and-t-v4/read
+- Real-time data visualization with D3, Crossfilter, and Websockets in Python by example: http://www.benjaminmbrown.com/2016/02/tutorial-how-to-build-real-time-data-visualization-with-d3-crossfilter-and-websockets-in-python-by-example/
+- Create Rich Interactive Visualisations: https://becomingadatascientist.wordpress.com/tag/crossfilter-js/
+
