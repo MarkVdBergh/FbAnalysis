@@ -99,7 +99,7 @@ def drop_test_database():
     # sleep(60)
     client.drop_database(TEST_DATABASE)
 
-def load_pages():
+def load_pagelist():
     collection =db.pages
     for type in facebook_page_lists:
         for sub_type in facebook_page_lists[type]:
@@ -117,4 +117,5 @@ if __name__ == '__main__':
     print 'Databases: ', client.database_names()
     print 'Collections: ', db.collection_names()
     print setup_databases()
-    load_pages()
+    load_pagelist()
+
